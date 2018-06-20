@@ -161,17 +161,24 @@ function createSettingsPage(userPrefs) {
             if (userPrefs[catKey][settingKey][option]) {
               switchListAttrs.checked = true;
             }
+            const label = typeof setting.options[option] === 'object' ? setting.options[option].label : setting.options[option];
+            const message = typeof setting.options[option] === 'object' ? setting.options[option].message : '';
+            const id = typeof setting.options[option] === 'object' ? `#${setting.options[option].id}` : '';
             switchList.appendChild(
-              h('li',
+              h(`li${id}`,
                 [
-                  h('span', setting.options[option]),
+                  h('span', label),
                   h('div.switch',
                     [
                       h(`input#${optionId}`,
                         switchListAttrs),
-                      h('label',
-                        {
-                          htmlFor: optionId })])]));
+                      h('label', { htmlFor: optionId }),
+                    ],
+                  ),
+                  h('div.message', message),
+                ],
+              ),
+            );
           });
           settingCat.appendChild(switchList);
           break;
@@ -193,6 +200,7 @@ module.exports = {
     this.settingsPage = createSettingsPage(userPrefs);
     document.querySelector('#menu-page').appendChild(this.settingsPage);
     this.applySettings();
+    document.body.classList.add(store.get('userPrefs.app.theme'));
   },
 
   applySettings(prefs = false) {

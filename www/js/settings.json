@@ -2,11 +2,6 @@
   "app": {
     "title": "App Settings",
     "settings": {
-      "theme": {
-        "title": "",
-        "type": "radio",
-        "options": {}
-      },
       "custom-theme-options": {
         "title": "Themes Options",
         "type": "switch",
@@ -74,7 +69,10 @@
           "larivaar": "Larivaar",
           "left-align": "Left-Align",
           "autoplay": "Auto Play",
-          "livefeed": "Live Feed Text Files"
+          "livefeed": {
+            "id": "livefeed",
+            "label": "Live Feed Text Files"
+          }
         }
       },
       "autoplay-options": {

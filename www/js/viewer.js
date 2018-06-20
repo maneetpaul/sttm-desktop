@@ -31,6 +31,8 @@ const $viewer = document.getElementById('viewer');
 const $scroll = window;
 
 $body.classList.add(process.platform);
+$body.classList.add(prefs.app.theme);
+
 
 core.menu.settings.applySettings(prefs);
 
