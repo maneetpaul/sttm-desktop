@@ -1,7 +1,24 @@
 $viewer-gurmukhi-font-family: 'gurbaniakharthick';
 $viewer-padding: 30px;
-$bisram-main: #c0392b;
-$bisram-yamki: #ffc500;
+
+/* Toggle vishraam settings based on if vishraams are visible */
+#settings {
+  .block-list {
+    overflow-y: hidden;
+  }
+
+  #setting-container-toolbar-vishraam-vishraam-options,
+  #setting-container-toolbar-vishraam-vishraam-source {
+    display: none;
+  }
+}
+
+.display-visraams #settings {
+  #setting-container-toolbar-vishraam-vishraam-options,
+  #setting-container-toolbar-vishraam-vishraam-source {
+    display: flex;
+  }
+}
 
 @font-face {
   font-family: $viewer-gurmukhi-font-family;
@@ -38,7 +55,7 @@ body {
   background-size: cover;
 }
 
-[contenteditable=true]:empty:not(:focus)::before {
+[contenteditable='true']:empty:not(:focus)::before {
   content: attr(data-placeholder);
   display: block;
 }
@@ -55,7 +72,7 @@ body {
 }
 
 .ribbon {
-  background-image: url("../../assets/img/custom_backgrounds/embellishes/floral.png");
+  background-image: url('../../assets/img/custom_backgrounds/embellishes/floral.png');
   height: 100px;
   position: fixed;
   visibility: hidden;
@@ -217,7 +234,7 @@ h2 {
 
   .visibility i {
     &::before {
-      content: "\f06e";
+      content: '\f06e';
     }
   }
 }
@@ -296,6 +313,7 @@ h2 {
   .viewer-controls,
   &.webview .vc-toggle-icon {
     display: flex;
+    opacity: 0.9;
   }
 }
 
@@ -381,42 +399,4 @@ h2 {
   }
 }
 
-.light-theme,
-.dark-theme,
-.high-contrast,
-.low-light {
-  &.display-bisrams.colored-words .gurbani {
-    .bisram-main {
-      color: $bisram-main;
-    }
-
-    .bisram-yamki {
-      color: $bisram-yamki;
-    }
-  }
-
-  &.display-bisrams.gradient-bg .gurbani {
-    span {
-      border-radius: 15px;
-    }
-
-    .padchhed .bisram-main,
-    .padchhed .bisram-yamki {
-      padding-right: 5px;
-    }
-
-    .bisram-main {
-      background: linear-gradient(to right, rgba(229, 229, 229, 0) 20%, rgba(255, 69, 0, 0.5) 100%);
-    }
-
-    .bisram-yamki {
-      background: linear-gradient(to right, rgba(229, 229, 229, 0) 20%, rgba(255, 197, 0, 0.5) 100%);
-    }
-  }
-}
-
-@import
-  "display-next-line",
-  "theme-dark",
-  "theme-light",
-  "win32";
+@import 'display-next-line', 'win32';

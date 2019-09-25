@@ -1,3 +1,12 @@
+.desktop .tingle-modal {
+  z-index: 1400;
+}
+
+.sync-code-modal {
+  .tingle-modal-box__content {
+    color: #000;
+  }
+}
 .notifications-modal {
   .tingle-modal-box__content {
     color: #000;
@@ -37,7 +46,8 @@
 }
 
 .dark-theme {
-  .notifications-modal {
+  .notifications-modal,
+  .sync-code-modal {
     .tingle-modal-box__content {
       color: #fff;
 
@@ -51,7 +61,7 @@
 .badge::after {
   background: red;
   border-radius: 50%;
-  content: "";
+  content: '';
   height: 0.5rem;
   position: absolute;
   right: 3.2rem;

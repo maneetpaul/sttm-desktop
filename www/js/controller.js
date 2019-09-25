@@ -2,10 +2,8 @@
 const electron = require('electron');
 const anvaad = require('anvaad-js');
 
-const remote = electron.remote;
-const dialog = remote.dialog;
-const app = remote.app;
-const Menu = remote.Menu;
+const { remote } = electron;
+const { app, dialog, Menu } = remote;
 const main = remote.require('./app');
 const { store, appstore } = main;
 const analytics = remote.getGlobal('analytics');
@@ -16,7 +14,7 @@ global.webview.addEventListener('dom-ready', () => {
   global.webview.send('is-webview');
 });
 
-global.webview.addEventListener('ipc-message', (event) => {
+global.webview.addEventListener('ipc-message', event => {
   switch (event.channel) {
     case 'scroll-pos': {
       const pos = event.args[0];
@@ -210,6 +208,13 @@ const winMenu = [
         },
       },
       {
+        label: 'Shorcut Legend...',
+        click: () => {
+          analytics.trackEvent('menu', 'shortcut-legend');
+          main.openSecondaryWindow('shortcutLegend');
+        },
+      },
+      {
         label: 'Changelog...',
         click: () => {
           analytics.trackEvent('menu', 'changelog');
@@ -297,6 +302,13 @@ const macMenu = [
         },
       },
       {
+        label: 'Shorcut Legend...',
+        click: () => {
+          analytics.trackEvent('menu', 'shortcut-legend');
+          main.openSecondaryWindow('shortcutLegend');
+        },
+      },
+      {
         label: 'Changelog...',
         click: () => {
           main.openSecondaryWindow('changelogWindow');
@@ -312,7 +324,10 @@ const macMenu = [
   },
   ...devMenu,
 ];
-const menu = Menu.buildFromTemplate(process.platform === 'darwin' || process.platform === 'linux' ? macMenu : winMenu);
+
+const menu = Menu.buildFromTemplate(
+  process.platform === 'darwin' || process.platform === 'linux' ? macMenu : winMenu,
+);
 if (process.platform === 'darwin' || process.platform === 'linux') {
   Menu.setApplicationMenu(menu);
 }
@@ -323,16 +338,30 @@ Mousetrap.bindGlobal('mod+q', () => {
 });
 
 const $menuButton = document.querySelector('.menu-button');
-$menuButton.addEventListener('contextmenu', (e) => {
+$menuButton.addEventListener('contextmenu', e => {
   e.preventDefault();
   e.stopPropagation();
   menu.popup(remote.getCurrentWindow());
 });
 $menuButton.addEventListener('click', () => {
   const e = $menuButton.ownerDocument.createEvent('MouseEvents');
-  e.initMouseEvent('contextmenu', true, true,
-    $menuButton.ownerDocument.defaultView, 1, 0, 0, 0, 0, false,
-    false, false, false, 2, null);
+  e.initMouseEvent(
+    'contextmenu',
+    true,
+    true,
+    $menuButton.ownerDocument.defaultView,
+    1,
+    0,
+    0,
+    0,
+    0,
+    false,
+    false,
+    false,
+    false,
+    2,
+    null,
+  );
   return !$menuButton.dispatchEvent(e);
 });
 
@@ -345,7 +374,9 @@ function updateViewerScale() {
       height: window.innerHeight,
     };
   }
-  const $fitInsideWindow = document.body.classList.contains('presenter-view') ? document.getElementById('navigator') : document.body;
+  const $fitInsideWindow = document.body.classList.contains('presenter-view')
+    ? document.getElementById('navigator')
+    : document.body;
   let scale = 1;
   let previewStyles = '';
   let previewWinStyles = '';
@@ -364,19 +395,24 @@ function updateViewerScale() {
   if (fitInsideHeight > proposedHeight) {
     scale = fitInsideWidth / global.viewer.width;
     previewStyles += `right: ${fitInsidePadding};`;
-    previewStyles += `top: calc(${fitInsidePadding} + ${(fitInsideHeight - proposedHeight) / 2}px);`;
-    previewWinStyles += `top: calc(${fitInsidePadding} + 25px + ${(fitInsideHeight - proposedHeight) / 2}px);`;
+    previewStyles += `top: calc(${fitInsidePadding} + ${(fitInsideHeight - proposedHeight) /
+      2}px);`;
+    previewWinStyles += `top: calc(${fitInsidePadding} + 25px + ${(fitInsideHeight -
+      proposedHeight) /
+      2}px);`;
   } else {
     scale = fitInsideHeight / global.viewer.height;
     const proposedWidth = fitInsideHeight * viewerRatio;
     previewStyles += `top: ${fitInsidePadding};`;
     previewWinStyles += `top: calc(${fitInsidePadding} + 25px);`;
-    previewStyles += `right: calc(${fitInsidePadding} + ${(fitInsideWidth - proposedWidth) / 2}px);`;
+    previewStyles += `right: calc(${fitInsidePadding} + ${(fitInsideWidth - proposedWidth) /
+      2}px);`;
   }
   previewStyles += `transform: scale(${scale});`;
   previewStyles = document.createTextNode(
     `.scale-viewer #main-viewer { ${previewStyles} }
-    .scale-viewer.win32 #main-viewer { ${previewWinStyles} }`);
+    .scale-viewer.win32 #main-viewer { ${previewWinStyles} }`,
+  );
   const $previewStyles = document.getElementById('preview-styles');
 
   if ($previewStyles) {
@@ -392,7 +428,7 @@ function updateViewerScale() {
 
 function checkPresenterView() {
   const inPresenterView = store.getUserPref('app.layout.presenter-view');
-  const classList = document.body.classList;
+  const { classList } = document.body;
 
   classList.toggle('presenter-view', inPresenterView);
   classList.toggle('home', !inPresenterView);
@@ -401,6 +437,17 @@ function checkPresenterView() {
   document.querySelector('#presenter-view-toggle').checked = inPresenterView;
   // hide header-tabs for non presenter view
   document.querySelector('.nav-header-tabs').classList.toggle('hidden', !inPresenterView);
+  global.platform.ipc.send('presenter-view', inPresenterView);
+}
+
+function reloadBani(resume = false) {
+  const $shabad = document.getElementById('shabad');
+  const currentBani = $shabad.dataset.bani;
+  const $currentLine = $shabad.querySelector('.current');
+  const lineID = resume && $currentLine ? $currentLine.dataset.lineId : null;
+  if (currentBani) {
+    global.core.search.loadBani(currentBani, lineID);
+  }
 }
 
 global.platform.ipc.on('presenter-view', () => {
@@ -423,7 +470,10 @@ window.onresize = () => {
   updateViewerScale();
 };
 
-const menuUpdate = (process.platform === 'darwin' || process.platform === 'linux' ? menu.items[0].submenu : menu.items[3].submenu);
+const menuUpdate =
+  process.platform === 'darwin' || process.platform === 'linux'
+    ? menu.items[0].submenu
+    : menu.items[3].submenu;
 const menuCast = menu.items[3].submenu;
 
 global.platform.ipc.on('checking-for-update', () => {
@@ -471,7 +521,6 @@ global.platform.ipc.on('cast-session-stopped', () => {
   store.set('userPrefs.slide-layout.display-options.disable-akhandpaatt', false);
 });
 
-
 module.exports = {
   clearAPV() {
     global.webview.send('clear-apv');
@@ -489,24 +538,43 @@ module.exports = {
     return Line;
   },
 
-  sendLine(shabadID, lineID, rawLine, rawRows) {
+  sendLine(shabadID, lineID, rawLine, rawRows, mode, start, fromScroll) {
     const Line = this.remapLine(rawLine);
     const rows = rawRows.map(row => this.remapLine(row));
-    global.webview.send('show-line', { shabadID, lineID, rows });
-    const showLinePayload = { shabadID, lineID, Line, live: false, larivaar: store.get('userPrefs.slide-layout.display-options.larivaar'), rows };
+    global.webview.send('show-line', { shabadID, lineID, rows, mode });
+    const showLinePayload = {
+      shabadID,
+      lineID,
+      Line,
+      live: false,
+      larivaar: store.get('userPrefs.slide-layout.display-options.larivaar'),
+      rows,
+      mode,
+      fromScroll,
+    };
     if (document.body.classList.contains('livefeed')) {
       showLinePayload.live = true;
     }
-    global.platform.ipc.send('show-line', showLinePayload);
+    // when paging, the first line gets loaded again. this makes sure obs shows the correct line.
+    if (
+      (start === 0 || start === undefined || mode === 'append') &&
+      !(
+        showLinePayload.Line.sessionKey &&
+        showLinePayload.Line.sessionKey.indexOf('ceremony') > -1 &&
+        mode === 'append' &&
+        start > 0
+      )
+    ) {
+      global.platform.ipc.send('show-line', showLinePayload);
+    }
   },
 
-  sendText(text, isGurmukhi) {
+  sendText(text, isGurmukhi, isAnnouncement = false) {
     global.webview.send('show-empty-slide');
-    global.webview.send('show-text', { text, isGurmukhi });
+    global.webview.send('show-text', { text, isGurmukhi, isAnnouncement });
     global.platform.ipc.send('show-empty-slide');
-    global.platform.ipc.send('show-text', { text, isGurmukhi });
+    global.platform.ipc.send('show-text', { text, isGurmukhi, isAnnouncement });
   },
-
   sendScroll(pos) {
     global.platform.ipc.send('send-scroll', { pos });
   },
@@ -526,23 +594,34 @@ module.exports = {
     store.setUserPref('slide-layout.display-options.colored-words', !gradientBgVal);
   },
 
+  'gurbani-bani-length': function gurbaniBaniLength() {
+    reloadBani();
+  },
+
+  'gurbani-mangal-position': function gurbaniMangalPosition() {
+    reloadBani(true);
+  },
+
   autoplay() {
     global.core.search.checkAutoPlay();
   },
 
   livefeed(val) {
     if (val) {
-      dialog.showOpenDialog({
-        defaultPath: remote.app.getPath('desktop'),
-        properties: ['openDirectory'],
-      }, (path) => {
-        store.set('userPrefs.app.live-feed-location', path[0]);
-        const locationLabel = document.getElementsByClassName('sub-label livefeed');
+      dialog.showOpenDialog(
+        {
+          defaultPath: remote.app.getPath('desktop'),
+          properties: ['openDirectory'],
+        },
+        path => {
+          store.set('userPrefs.app.live-feed-location', path[0]);
+          const locationLabel = document.getElementsByClassName('sub-label livefeed');
 
-        for (let i = 0, len = locationLabel.length; i < len; i += 1) {
-          locationLabel[i].innerText = path;
-        }
-      });
+          for (let i = 0, len = locationLabel.length; i < len; i += 1) {
+            locationLabel[i].innerText = path;
+          }
+        },
+      );
     }
   },
 };

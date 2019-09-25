@@ -1,44 +1,29 @@
 const electron = require('electron');
-const Store = require('./www/js/store.js');
-const defaultPrefs = require('./www/js/defaults.json');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const Analytics = require('./analytics');
 const uuid = require('uuid/v4');
+const op = require('openport');
+const Store = require('./www/js/store.js');
+const defaultPrefs = require('./www/js/defaults.json');
+const Analytics = require('./analytics');
 
 // Are we packaging for a platform's app store?
 const appstore = false;
+const maxChangeLogSeenCount = 5;
 
 const expressApp = express();
-
-const http = require('http').Server(expressApp);
+/* eslint-disable import/order */
+const httpBase = require('http').Server(expressApp);
+const http = require('http-shutdown')(httpBase);
 const io = require('socket.io')(http);
+/* eslint-enable */
 
 expressApp.use(express.static(path.join(__dirname, 'www', 'obs')));
 
 const { app, BrowserWindow, dialog, ipcMain } = electron;
-
-const op = require('openport');
-
-op.find(
-  {
-    // Re: http://www.sikhiwiki.org/index.php/Gurgadi
-    ports: [1397, 1469, 1539, 1552, 1574, 1581, 1606, 1644, 1661, 1665, 1675, 1708],
-    count: 1,
-  },
-  (err, port) => {
-    if (err) {
-      dialog.showErrorBox('Overlay Error', 'No free ports available. Close other applications and Reboot the machine');
-      app.exit(-1);
-      return;
-    }
-    global.overlayPort = port;
-    // console.log(`Overlay Port No ${port}`);
-    http.listen(port);
-  });
 
 const store = new Store({
   configName: 'user-preferences',
@@ -47,13 +32,30 @@ const store = new Store({
 
 const appVersion = app.getVersion();
 
+const overlayCast = store.getUserPref('app.overlay-cast');
+
 let mainWindow;
 let viewerWindow = false;
+let startChangelogOpenTimer;
+let endChangelogOpenTimer;
 const secondaryWindows = {
   changelogWindow: {
     obj: false,
     url: `file://${__dirname}/www/changelog.html`,
-    onClose: () => { store.set('changelog-seen', appVersion); },
+    onClose: () => {
+      const count = store.get('changelog-seen-count');
+      endChangelogOpenTimer = new Date().getTime();
+      store.set('changelog-seen', appVersion);
+      store.set('changelog-seen-count', count + 1);
+      global.analytics.trackEvent(
+        'changelog',
+        'closed',
+        (endChangelogOpenTimer - startChangelogOpenTimer) / 1000.0,
+      );
+    },
+    show: () => {
+      startChangelogOpenTimer = new Date().getTime();
+    },
   },
   helpWindow: {
     obj: false,
@@ -62,6 +64,10 @@ const secondaryWindows = {
   overlayWindow: {
     obj: false,
     url: `file://${__dirname}/www/overlay.html`,
+  },
+  shortcutLegend: {
+    obj: false,
+    url: `file://${__dirname}/www/legend.html`,
   },
 };
 let manualUpdate = false;
@@ -81,6 +87,9 @@ function openSecondaryWindow(windowName) {
     });
     window.obj.webContents.on('did-finish-load', () => {
       window.obj.show();
+      if (window.show) {
+        window.show();
+      }
     });
     window.obj.loadURL(window.url);
 
@@ -108,9 +117,7 @@ autoUpdater.on('update-not-available', () => {
   if (manualUpdate) {
     dialog.showMessageBox({
       type: 'info',
-      buttons: [
-        'OK',
-      ],
+      buttons: ['OK'],
       defaultId: 0,
       title: 'No update available.',
       message: 'No update available.',
@@ -120,22 +127,22 @@ autoUpdater.on('update-not-available', () => {
 });
 autoUpdater.on('update-downloaded', () => {
   mainWindow.webContents.send('update-downloaded');
-  dialog.showMessageBox({
-    type: 'info',
-    buttons: [
-      'Dismiss',
-      'Install and Restart',
-    ],
-    defaultId: 1,
-    title: 'Update available.',
-    message: 'Update available.',
-    detail: 'Update downloaded and ready to install',
-    cancelId: 0,
-  }, (response) => {
-    if (response === 1) {
-      autoUpdater.quitAndInstall();
-    }
-  });
+  dialog.showMessageBox(
+    {
+      type: 'info',
+      buttons: ['Dismiss', 'Install and Restart'],
+      defaultId: 1,
+      title: 'Update available.',
+      message: 'Update available.',
+      detail: 'Update downloaded and ready to install',
+      cancelId: 0,
+    },
+    response => {
+      if (response === 1) {
+        autoUpdater.quitAndInstall();
+      }
+    },
+  );
 });
 autoUpdater.on('error', () => {
   if (manualUpdate) {
@@ -156,7 +163,7 @@ function checkForExternalDisplay() {
   const electronScreen = electron.screen;
   const displays = electronScreen.getAllDisplays();
   let externalDisplay = null;
-  Object.keys(displays).forEach((i) => {
+  Object.keys(displays).forEach(i => {
     if (displays[i].bounds.x !== 0 || displays[i].bounds.y !== 0) {
       externalDisplay = displays[i];
     }
@@ -183,7 +190,8 @@ function createViewer(ipcData) {
       autoHideMenuBar: true,
       show: false,
       titleBarStyle: 'hidden',
-      frame: (process.platform !== 'win32'),
+      frame: process.platform !== 'win32',
+      backgroundColor: '#000000',
     });
     viewerWindow.loadURL(`file://${__dirname}/www/viewer.html`);
     viewerWindow.webContents.on('did-finish-load', () => {
@@ -222,7 +230,10 @@ function createViewer(ipcData) {
 
 function createBroadcastFiles(arg) {
   const liveFeedLocation = store.get('userPrefs.app.live-feed-location');
-  const userDataPath = (liveFeedLocation === 'default' || !liveFeedLocation) ? electron.app.getPath('desktop') : liveFeedLocation;
+  const userDataPath =
+    liveFeedLocation === 'default' || !liveFeedLocation
+      ? electron.app.getPath('desktop')
+      : liveFeedLocation;
   const gurbaniFile = `${userDataPath}/sttm-Gurbani.txt`;
   const englishFile = `${userDataPath}/sttm-English.txt`;
   try {
@@ -239,7 +250,9 @@ function createBroadcastFiles(arg) {
 const showLine = (line, socket = io) => {
   const overlayPrefs = store.get('obs');
   const payload = Object.assign(line, overlayPrefs);
-  socket.emit('show-line', payload);
+  if (!line.fromScroll) {
+    socket.emit('show-line', payload);
+  }
 };
 
 const updateOverlayVars = () => {
@@ -263,6 +276,55 @@ const emptyOverlay = () => {
   }
 };
 
+const shouldQuit = app.makeSingleInstance(() => {
+  // Someone tried to run a second instance, we should focus our window.
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.focus();
+  }
+});
+
+const searchPorts = () => {
+  op.find(
+    {
+      // Re: http://www.sikhiwiki.org/index.php/Gurgadi
+      ports: [1397, 1469, 1539, 1552, 1574, 1581, 1606, 1644, 1661, 1665, 1675, 1708],
+      count: 1,
+    },
+    (err, port) => {
+      if (err) {
+        dialog.showErrorBox(
+          'Overlay Error',
+          'No free ports available. Close other applications and Reboot the machine',
+        );
+        app.exit(-1);
+        return;
+      }
+      global.overlayPort = port;
+      // console.log(`Overlay Port No ${port}`);
+      http.listen(port);
+    },
+  );
+};
+
+ipcMain.on('toggle-obs-cast', (event, arg) => {
+  if (arg) {
+    searchPorts();
+  } else {
+    http.shutdown();
+  }
+});
+
+if (overlayCast) {
+  searchPorts();
+}
+
+if (shouldQuit) {
+  app.exit();
+}
+
 app.on('ready', () => {
   // Retrieve the userid value, and if it's not there, assign it a new uuid.
   let userId = store.get('userId');
@@ -281,8 +343,9 @@ app.on('ready', () => {
     minHeight: 600,
     width,
     height,
-    frame: (process.platform !== 'win32'),
+    frame: process.platform !== 'win32',
     show: false,
+    backgroundColor: '#000000',
     titleBarStyle: 'hidden',
   });
   mainWindow.webContents.on('did-finish-load', () => {
@@ -300,7 +363,10 @@ app.on('ready', () => {
     }
     // Show changelog if last version wasn't seen
     const lastSeen = store.get('changelog-seen');
-    if (lastSeen !== appVersion) {
+    const lastSeenCount = store.get('changelog-seen-count');
+    const limitChangeLog = store.get('userPrefs.app.analytics.limit-changelog');
+
+    if (lastSeen !== appVersion || (lastSeenCount < maxChangeLogSeenCount && !limitChangeLog)) {
       openSecondaryWindow('changelogWindow');
     }
     if (!viewerWindow) {
@@ -333,11 +399,10 @@ app.on('ready', () => {
   });
 });
 
-
 // Quit when all windows are closed.
 app.on('window-all-closed', () => {
-    // On OS X it is common for applications and their menu bar
-    // to stay active until the user quits explicitly with Cmd + Q
+  // On OS X it is common for applications and their menu bar
+  // to stay active until the user quits explicitly with Cmd + Q
   // if (process.platform !== 'darwin') {
   app.quit();
   // }
@@ -364,7 +429,7 @@ let lastLine;
 
 ipcMain.on('update-overlay-vars', updateOverlayVars);
 
-io.on('connection', (socket) => {
+io.on('connection', socket => {
   updateOverlayVars();
   if (lastLine) {
     showLine(lastLine, socket);
@@ -400,7 +465,22 @@ ipcMain.on('show-text', (event, arg) => {
       Transliteration: '',
     },
   };
-  showLine(textLine);
+
+  const emptyLine = {
+    Line: {
+      Gurmukhi: '',
+      English: '',
+      Punjabi: '',
+      Transliteration: '',
+    },
+  };
+
+  const announcementOverlay = store.getUserPref('app.announcement-overlay');
+  if (arg.isAnnouncement && !announcementOverlay) {
+    showLine(emptyLine);
+  } else {
+    showLine(textLine);
+  }
 
   if (viewerWindow) {
     viewerWindow.webContents.send('show-text', arg);
@@ -412,6 +492,17 @@ ipcMain.on('show-text', (event, arg) => {
   }
   if (arg.live) {
     createBroadcastFiles(arg);
+  }
+});
+
+ipcMain.on('presenter-view', (event, arg) => {
+  if (viewerWindow) {
+    if (!arg) {
+      viewerWindow.hide();
+    } else {
+      viewerWindow.show();
+      viewerWindow.setFullScreen(true);
+    }
   }
 });
 
